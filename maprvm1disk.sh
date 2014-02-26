@@ -10,21 +10,36 @@
 
 ######config section..edit me######
 
-CLUSTERNAME="homedemo"
+CLUSTERNAME="maprnfs"
 MAPRVERSION="3.0.2"
+CENTOS_VERSION="6"
 REPO_URL="192.168.6.1"
 #REPO_URL="packages.mapr.com"
 
-MYHOSTS="impala-1 impala-2 impala-3"
-CLDBHOSTS="impala-1"
-ZK_HOSTS="impala-1,impala-2,impala-3"
-HIVE_HOST="impala-1"
 
-CLUSHGROUPS_ALL="all: impala-[1-3]"
-CLUSHGROUPS_JT="jt: impala-[3]"
-CLUSHGROUPS_CLDB="cldb: impala-[1]"
-CLUSHGROUPS_ZK="zk: impala-[1-3]"
+MYHOSTS="mapr-nfs-1 mapr-nfs-2 mapr-nfs-3"
+CLDBHOSTS="mapr-nfs-1"
+ZK_HOSTS="mapr-nfs-1"
+HIVE_HOST="mapr-nfs-1"
+
+
+# MYHOSTS="impala-1 impala-2 impala-3"
+# CLDBHOSTS="impala-1"
+# ZK_HOSTS="impala-1,impala-2,impala-3"
+# HIVE_HOST="impala-1"
+
+CLUSHGROUPS_ALL="all: mapr-nfs-[1-3]"
+CLUSHGROUPS_JT="jt: mapr-nfs-1"
+CLUSHGROUPS_CLDB="cldb: mapr-nfs-1"
+CLUSHGROUPS_ZK="zk: mapr-nfs-1"
 CLUSHGROUPS_HIVE="hive: ${HIVE_HOST}"
+
+
+# CLUSHGROUPS_ALL="all: impala-[1-3]"
+# CLUSHGROUPS_JT="jt: impala-[3]"
+# CLUSHGROUPS_CLDB="cldb: impala-[1]"
+# CLUSHGROUPS_ZK="zk: impala-[1-3]"
+# CLUSHGROUPS_HIVE="hive: ${HIVE_HOST}"
 
 DISKS="sdb sdc"
 
@@ -49,11 +64,19 @@ install_prereqs () {
 	
 	cd /tmp
 	
-	wget http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
-	
-	
-	rpm -Uvh epel-release-6-8.noarch.rpm
-	
+	if [ $CENTOS_VERSION = 6 ]
+		then 
+		wget http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+		rpm -Uvh epel-release-6-8.noarch.rpm
+		EPEL_RPM="epel-release-6-8.noarch.rpm"
+	elif [ $CENTOS_VERSION = 5 ]
+		then
+		wget http://dl.fedoraproject.org/pub/epel/5/x86_64/epel-release-5-4.noarch.rpm
+		rpm -Uvh epel-release-5-4.noarch.rpm
+		EPEL_RPM="epel-release-5-4.noarch.rpm"
+	fi
+
+
 	yum install -y clustershell
 	
 	
@@ -79,7 +102,7 @@ install_prereqs () {
 	#
 	
 	for HOST in $MYHOSTS
-		do MEM=`ssh impala-1 "free|grep Mem|egrep -o 'Mem:\s+[0-9]+'|egrep -o '[0-9]+'"`
+		do MEM=`ssh ${HOST} "free|grep Mem|egrep -o 'Mem:\s+[0-9]+'|egrep -o '[0-9]+'"`
 		if [ ${MEM} -lt $RAM_MIN ]
 			then echo "$HOST only has $MEM RAM, exiting"
 			exit 1
@@ -112,22 +135,27 @@ install_prereqs () {
 	clush -a -c /etc/yum.repos.d/maprtech.repo
 	
 	# # TODO: dvd repo
-	# clush -a "mkdir -p /media/cdrom"
-	# clush -a "mount /dev/sr0 /media/cdrom"
+	 clush -a "mkdir -p /media/cdrom"
+	 clush -a "mount /dev/sr0 /media/cdrom"
+	
+	#This was something I started doing trying to make sure the DVD was really there..but for now we'll
+	# just assume that it is and mark that repo as enabled. 
+	 #DVDMINSIZE=3000000000
 	# 
-	# DVDMINSIZE=3000000000
-	# 
-	# for HOST in $MYHOSTS
-		# do ${HOST}_DVDSIZE=`ssh ${HOST} "du -bs /media/cdrom/Packages|awk {'print $1'}"`
-		# if [ ${HOST}_${DVDSIZE} -gt $DVDMINSIZE ]
-			# then clush -a 'sed -i "s/enabled=0/enabled=1/g" /etc/yum.repos.d/CentOS-Media.repo'
+	 #for HOST in $MYHOSTS
+	#	 do let ${HOST}_DVDSIZE=`ssh ${HOST} "du -bs /media/cdrom/Packages|awk {'print $1'}"`
+	#	 if [ ${HOST}_${DVDSIZE} -gt $DVDMINSIZE ]
+	#		 then clush -a 'sed -i "s/enabled=0/enabled=1/g" /etc/yum.repos.d/CentOS-Media.repo'
+	#	fi
+	#	done
 	# 
 	# 
 	
+	clush -a 'sed -i "s/enabled=0/enabled=1/g" /etc/yum.repos.d/CentOS-Media.repo'
 	
 	# get EPEL on other nodes
-	clush -a -c /tmp/epel-release-6-8.noarch.rpm
-	clush -a "rpm -Uvh /tmp/epel-release-6-8.noarch.rpm"
+	clush -a -c /tmp/${EPEL_RPM}
+	clush -a "rpm -Uvh /tmp/${EPEL_RPM}"
 	
 	#fix /etc/hosts
 	echo "127.0.0.1       localhost.localdomain  localhost" > /etc/hosts

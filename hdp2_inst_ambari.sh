@@ -6,7 +6,7 @@
 #
 
 MYHOSTS="hdp-nfs-1 hdp-nfs-2 hdp-nfs-3"
-CLUSHGROUPS="all: hdp-nfs[1-3]"
+CLUSHGROUPS="all: hdp-nfs-[1-3]"
 DISKS="sdb sdc"
 
 
@@ -32,7 +32,10 @@ ssh-keygen -t rsa
 
 
 
-for i in $MYHOSTS; do ssh-copy-id -i /root/.ssh/id_rsa.pub root@${i}
+for i in $MYHOSTS
+	do ssh-copy-id -i /root/.ssh/id_rsa.pub root@${i}
+done
+
 
 echo $CLUSHGROUPS > /etc/clustershell/groups
 
@@ -55,22 +58,32 @@ clush -a 'setenforce 0'
 
 FDISK="n p 1 a 1 t 83 w"
 
-for i in $FDISK; do echo $i >> /tmp/fdisk.txt;done;
+for i in $FDISK
+	do echo $i >> /tmp/fdisk.txt
+done
+
 clush -a -c /tmp/fdisk.txt
 
 #now to format the disks
 clush -a 'yum install -y xfsprogs'
 
-for disk in $DISKS; do clush -a "cat /tmp/fdisk.txt | fdisk /dev/${disk}; mkfs.xfs /dev/${disk}1";echo "done with $disk"; done;
+for disk in $DISKS
+	do clush -a "cat /tmp/fdisk.txt | fdisk /dev/${disk}; mkfs.xfs /dev/${disk}1"
+	echo "done with $disk"
+done
 
 
 # now make the 'grid' directories for HDP to use
 
-for disk in $DISKS; do clush -a "mkdir -p /grid/$disk";done;
+for disk in $DISKS
+	do clush -a "mkdir -p /grid/$disk"
+done
 
 # make an fstab
 
-for disk in $DISKS; do clush -a "echo "/dev/${disk}1 /grid/${disk} xfs defaults,noatime 0 0" >> /etc/fstab";done;
+for disk in $DISKS
+	do clush -a "echo "/dev/${disk}1 /grid/${disk} xfs defaults,noatime 0 0" >> /etc/fstab"
+done
 
 
 # mount new mounts
