@@ -10,36 +10,37 @@
 
 ######config section..edit me######
 
-CLUSTERNAME="maprnfs"
-MAPRVERSION="3.0.2"
+CLUSTERNAME="shark"
+#MAPRVERSION="3.0.2"
+MAPRVERSION="3.0.3"
 CENTOS_VERSION="6"
-REPO_URL="192.168.6.1"
+REPO_URL="192.168.6.1/package.mapr.com"
 #REPO_URL="packages.mapr.com"
 
 
-MYHOSTS="mapr-nfs-1 mapr-nfs-2 mapr-nfs-3"
-CLDBHOSTS="mapr-nfs-1"
-ZK_HOSTS="mapr-nfs-1"
-HIVE_HOST="mapr-nfs-1"
+# MYHOSTS="mapr31-1 mapr31-2 mapr31-3"
+# CLDBHOSTS="mapr31-1"
+# ZK_HOSTS="mapr31-1"
+# HIVE_HOST="mapr31-1"
 
 
-# MYHOSTS="impala-1 impala-2 impala-3"
-# CLDBHOSTS="impala-1"
-# ZK_HOSTS="impala-1,impala-2,impala-3"
-# HIVE_HOST="impala-1"
+MYHOSTS="shark-1 shark-2 shark-3"
+CLDBHOSTS="shark-1"
+ZK_HOSTS="shark-1,shark-2,shark-3"
+HIVE_HOST="shark-1"
 
-CLUSHGROUPS_ALL="all: mapr-nfs-[1-3]"
-CLUSHGROUPS_JT="jt: mapr-nfs-1"
-CLUSHGROUPS_CLDB="cldb: mapr-nfs-1"
-CLUSHGROUPS_ZK="zk: mapr-nfs-1"
-CLUSHGROUPS_HIVE="hive: ${HIVE_HOST}"
-
-
-# CLUSHGROUPS_ALL="all: impala-[1-3]"
-# CLUSHGROUPS_JT="jt: impala-[3]"
-# CLUSHGROUPS_CLDB="cldb: impala-[1]"
-# CLUSHGROUPS_ZK="zk: impala-[1-3]"
+# CLUSHGROUPS_ALL="all: mapr31-[1-3]"
+# CLUSHGROUPS_JT="jt: mapr31-1"
+# CLUSHGROUPS_CLDB="cldb: mapr31-1"
+# CLUSHGROUPS_ZK="zk: mapr31-1"
 # CLUSHGROUPS_HIVE="hive: ${HIVE_HOST}"
+
+
+CLUSHGROUPS_ALL="all: shark-[1-3]"
+CLUSHGROUPS_JT="jt: shark-[3]"
+CLUSHGROUPS_CLDB="cldb: shark-[1]"
+CLUSHGROUPS_ZK="zk: shark-[1-3]"
+CLUSHGROUPS_HIVE="hive: ${HIVE_HOST}"
 
 DISKS="sdb sdc"
 
@@ -192,10 +193,11 @@ install_packages () {
 	clush -a "chkconfig ntpd on;service ntpd start"
 	# fix java
 	#clush -a "yum erase -y java-1.6.0-openjdk.x86_64"
-	clush -a "yum install --disablerepo=base,updates -y java-1.6.0-openjdk.x86_64"
+	# clush -a "yum install --disablerepo=base,updates -y java-1.6.0-openjdk.x86_64"
+	clush -a "yum install --disablerepo=base,updates -y java-1.7.0-openjdk-devel.x86_64"
 	#all hosts
 	clush -a "yum install -y nfs-utils"
-	clush -a "yum install --disablerepo=base,updates -y mapr-fileserver mapr-tasktracker mapr-nfs mapr-webserver mapr-hive mapr-metrics"
+	clush -a "yum install --disablerepo=base,updates -y mapr-fileserver mapr-tasktracker mapr-nfs mapr-webserver mapr-hive mapr-metrics mapr-pig"
 	# cldb
 	clush -g cldb "yum install -y mapr-cldb"
 	#jt
@@ -211,9 +213,17 @@ install_packages () {
 	
 	
 	
-	echo "export JAVA_HOME=/usr/lib/jvm/java-1.6.0-openjdk-1.6.0.0.x86_64/jre" >> /opt/mapr/conf/env.sh
-	clush -a -c /opt/mapr/conf/env.sh	
 	
+	if [ $MAPRVERSION = 3.0.* ]
+		then
+		echo "export JAVA_HOME=/usr/lib/jvm/java-1.7.0-openjdk.x86_64" >> /opt/mapr/conf/env.sh
+	clush -a -c /opt/mapr/conf/env.sh
+		else
+		#on 3.1	, we don't need java stuff, but we need to hack configure.sh
+		sed -i 's/memNeeded=4096/memNeeded=2800/' /opt/mapr/server/configure.sh
+		clush -a -c /opt/mapr/server/configure.sh 
+	fi
+
 	clush -a "ls /opt/mapr/roles"
 	
 }
@@ -269,11 +279,25 @@ start_services () {
 	#check for cldb running
 	clush -g cldb "maprcli node cldbmaster"
 	
-	#put license in
+
+	
+}
+
+
+license () {
+
+		#put license in
 	
 	cd /tmp
-	wget http://192.168.6.1/mapr-lic.09jan2014
-	maprcli license add -is_file true -license /tmp/mapr-lic.09jan2014
+	wget http://192.168.6.1/90DayDemoLicense-M7.txt
+	maprcli license add -is_file true -license /tmp/90DayDemoLicense-M7.txt
+	
+	
+	#setup NFS localhost mount
+
+	clush -a 'mkdir -p /mapr'
+	echo "localhost:/mapr /mapr soft,intr,nolock" > /opt/mapr/conf/mapr_fstab
+	clush -a -c /opt/mapr/conf/mapr_fstab
 	
 	#restart warden to take the license.
 	
@@ -284,12 +308,9 @@ start_services () {
 	#clush -a "service rpcbind start"
 	sleep 10
 	
-	#mount NFS , this is probably aggressive..NFS needs to be started first.
-	#clush -a "mkdir -p /mapr"
-	#clush -a "mount -t nfs -o tcp,rw,nfsvers=3,nolock,hard localhost:/mapr /mapr"
-	
-}
 
+
+}
 nuke_it () {
 	clush -a "yum erase -y mapr-*"
 	clush -a "yum erase -y mysql"
@@ -396,5 +417,6 @@ config_mapr
 config_metrics
 start_services
 config_hive
+#license
 
 

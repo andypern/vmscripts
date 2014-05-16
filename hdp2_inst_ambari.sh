@@ -43,9 +43,17 @@ clush -a 'yum install -y java-1.6.0-openjdk.x86_64'
 
 clush -a 'yum install -y ntp.x86_64 ntpdate' 
 
-clush -a 'chkconfig ntpdate on'
 
+#set the time:
 clush -a 'service ntpdate start'
+sleep 10
+clush -a 'service ntpdate stop'
+
+clush -a 'service ntpd start'
+
+
+clush -a 'chkconfig ntpd on'
+
 
 clush -a 'setenforce 0'
 
@@ -79,6 +87,8 @@ for disk in $DISKS
 	do clush -a "mkdir -p /grid/$disk"
 done
 
+clush -a "chmod -R 777 /grid"
+
 # make an fstab
 
 for disk in $DISKS
@@ -91,6 +101,8 @@ done
 clush -a "mount -a"
 
 
+clush -a "chmod -R 777 /grid"
+
 
 
 wget http://public-repo-1.hortonworks.com/ambari/centos6/1.x/updates/1.4.3.38/ambari.repo
@@ -98,11 +110,16 @@ wget http://public-repo-1.hortonworks.com/ambari/centos6/1.x/updates/1.4.3.38/am
 cp ambari.repo /etc/yum.repos.d/
 
 #
-#make sure that /etc/hosts on all nodes doesn’t have the hostnames in the same line with ‘localhost’:
-#
-echo "127.0.0.1    localhost" > /etc/hosts  
+#this seems to be required:
+# 1) /etc/hosts: 192.168.6.136 hdp-nfs-1.localdomain hdp-nfs-1
+# 2) /etc/resolv.conf : search localdomain
+#						domain localdomain
+#otherwise ambari pukes on install.
 
-clush -a -c /etc/hosts
+#echo "127.0.0.1    localhost" > /etc/hosts
+# also, the there's an hdfs-site.xml param that can be changed to disable auth for datanode access.  
+
+#clush -a -c /etc/hosts
 
 yum install -y ambari-server
 
@@ -110,7 +127,7 @@ ambari-server setup
 
 ambari-server start
 
-cat /root/.ssh/id_dsa
+cat /root/.ssh/id_rsa
 
 echo "use the key above for your private key"
 
@@ -119,7 +136,11 @@ echo "Login to http://${IP}:8080   , admin/admin"
 #next/next/next… paste id_rsa (private key) from node-1.  you might get a warning about ntpd not running…no big deal since ntpdate is running.
 #next/next/next: take defaults for now.
 
-
+#also, you need to make sure to set this in the HDFS advanced section (winds up in hdfs-site.xml) : 
+#     <name>dfs.datanode.du.reserved</name>
+   # <value>107374182</value>
+    
+  #this is for vm's where there isn't a lot of space per disk, the default is 1GB, which may be too high (above value is ~100MB)
     
 
 
